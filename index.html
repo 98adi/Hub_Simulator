@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title> סימולטור פריסת מקומות עבודה שיתופיים </title>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- ייבוא קובץ הנקודות המדויק שיוצר בפייתון -->
+    <script src="dots_data.js"></script>
+
+    <style>
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f6f8;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        #control-panel {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            width: 370px;
+            max-height: 90vh;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        h2 {
+            margin: 0;
+            font-size: 1.3rem;
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 8px;
+        }
+
+        .toolbar {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .toolbar-title {
+            font-weight: bold;
+            color: #34495e;
+            font-size: 0.95rem;
+            margin-bottom: 2px;
+        }
+
+        .color-toggle-container {
+            display: flex;
+            background-color: #e9ecef;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #ced4da;
+            margin-bottom: 5px;
+        }
+
+        .color-toggle-btn {
+            flex: 1;
+            padding: 8px;
+            text-align: center;
+            font-size: 0.85rem;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+            background: none;
+            color: #6c757d;
+            transition: all 0.3s;
+        }
+
+        .color-toggle-btn.active {
+            background-color: #3498db;
+            color: white;
+        }
+
+        .tool-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            padding: 6px;
+            border-radius: 6px;
+            border: 1px solid transparent;
+            transition: background 0.2s, border-color 0.2s;
+        }
+
+        .tool-group:hover {
+            background: #e9ecef;
+            border-color: #dee2e6;
+        }
+
+        .tool-option {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .tool-option input[type="radio"],
+        .tool-option input[type="checkbox"] {
+            margin-left: 10px;
+            cursor: pointer;
+        }
+
+        .tool-settings {
+            margin-right: 0;
+            font-size: 0.85rem;
+            color: #555;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            justify-content: space-between;
+        }
+
+        .tool-settings select {
+            padding: 4px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            font-family: inherit;
+            width: 55%;
+        }
+
+        .slider-container {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .slider-label {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #34495e;
+            font-size: 0.9rem;
+        }
+
+        input[type=range] {
+            width: 100%;
+            cursor: pointer;
+        }
+
+        .description {
+            font-size: 0.8rem;
+            color: #7f8c8d;
+            line-height: 1.4;
+        }
+
+        .legend {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+        }
+
+        .legend-icon {
+            width: 20px;
+            height: 20px;
+            margin-left: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .btn-reset {
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.3s;
+            margin-top: 5px;
+        }
+
+        .btn-reset:hover {
+            background-color: #c0392b;
+        }
+
+        .custom-shape-icon {
+            background: none;
+            border: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="map"></div>
+
+    <div id="control-panel">
+        <h2> סימולטור פריסת מקומות עבודה שיתופיים </h2>
+
+        <!-- סרגל הגדרות סביבה: מפות, סינון ומצב פיזור -->
+        <div class="toolbar">
+            <div class="toolbar-title">הגדרות סביבה ותצוגה:</div>
+
+            <div class="tool-settings" style="margin-bottom: 6px;">
+                <label>מפת רקע:</label>
+                <select id="basemap-select" onchange="changeBasemap(this.value)">
+                    <option value="osm">רגילה (OpenStreetMap)</option>
+                    <option value="light">בהיר (Carto Light)</option>
+                    <option value="dark">כהה (Carto Dark)</option>
+                    <option value="satellite">לוויין (Esri Imagery)</option>
+                    <option value="streets">רחובות (Esri Streets)</option>
+                    <option value="topo">טופוגרפית (OpenTopoMap)</option>
+                    <option value="gray">אפור נקי (Esri Gray)</option>
+                </select>
+            </div>
+
+            <div class="tool-settings" style="margin-bottom: 6px;">
+                <label>מיקוד אזורי:</label>
+                <select id="region-select" onchange="changeRegion(this.value)">
+                    <option value="haifa_valleys">חיפה, קריות ועמקים בלבד</option>
+                    <option value="all">קיסריה עד גליל עליון</option>
+                    <option value="galilee">הגליל העליון והתחתון בלבד</option>
+                </select>
+            </div>
+
+            <div class="tool-settings">
+                <label>מודל אוכלוסייה:</label>
+                <select id="pop-mode-select" onchange="changePopMode(this.value)"
+                    style="background:#e8f4f8; font-weight:bold;">
+                    <option value="realistic">מציאותי (נתוני אמת)</option>
+                    <option value="theoretical">תיאורטי (רשת גריד אחידה)</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- סרגל צביעה ותחרות -->
+        <div class="toolbar">
+            <div class="toolbar-title">הגדרות תצוגת אזורי השפעה:</div>
+            <div class="color-toggle-container">
+                <button id="btn-color-type" class="color-toggle-btn active" onclick="setColorMode('type')">לפי סוג
+                    ההאב (מאקרו)</button>
+                <button id="btn-color-ind" class="color-toggle-btn" onclick="setColorMode('individual')">אינדיבידואלי
+                    (מיקרו/תחרות)</button>
+            </div>
+
+            <!-- טוגל אזור ניטרלי (Threshold) -->
+            <label class="tool-option" style="margin-top: 5px; padding-top: 8px; border-top: 1px dashed #ccc;">
+                <input type="checkbox" id="threshold-toggle" onchange="updateModel()">
+                <span style="font-weight:bold; color: #d35400;">הפעל סף אזור אדיש (40%)</span>
+            </label>
+        </div>
+
+        <!-- סרגל כלים: הוספת מרכזים -->
+        <div class="toolbar">
+            <div class="toolbar-title">הוספת עוגנים (לחיצה במפה):</div>
+            <div class="description" style="margin-bottom: 8px;">
+                * לחיצה שמאלית על סמן קיים תמחק אותו.
+            </div>
+            <div class="tool-group">
+                <label class="tool-option"><input type="radio" name="map-tool" value="none" checked><span>הזזת מפה /
+                        צפייה</span></label>
+            </div>
+            <div class="tool-group">
+                <label class="tool-option"><input type="radio" name="map-tool" value="large_hub">
+                    <div class="legend-icon" id="icon-preview-large"></div><span>עוגן תאגידי (Nvidia וכו')</span>
+                </label>
+                <div class="tool-settings" style="margin-right:25px; margin-top:5px;">
+                    <label>מסה:</label>
+                    <select id="large-mass" style="width:70%;">
+                        <option value="100">100 (קטן)</option>
+                        <option value="200">200 (בינוני)</option>
+                        <option value="300" selected>300 (ברירת מחדל)</option>
+                        <option value="400">400 (גדול)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="tool-group">
+                <label class="tool-option"><input type="radio" name="map-tool" value="shared_hub">
+                    <div class="legend-icon" id="icon-preview-shared"></div><span>Hub שיתופי מקומי</span>
+                </label>
+                <div class="tool-settings" style="margin-right:25px; margin-top:5px;">
+                    <label>מסה:</label>
+                    <select id="shared-mass" style="width:70%;">
+                        <option value="10">10 (שכונתי)</option>
+                        <option value="25" selected>25 (רגיל)</option>
+                        <option value="50">50 (גדול)</option>
+                        <option value="75">75 (ענק)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- סליידרים -->
+        <div class="slider-container">
+            <div class="slider-label"><span>רגישות לרגישות לזמן/VOT (Alpha):</span><span id="alpha-value">2.0</span>
+            </div>
+            <input type="range" id="alpha-slider" min="0.5" max="5.0" step="0.1" value="2.0">
+        </div>
+
+        <div class="slider-container" id="res-slider-container" style="display: none; margin-top: -5px;">
+            <div class="slider-label"><span>צפיפות רשת תיאורטית:</span><span id="res-value">40x40</span></div>
+            <input type="range" id="res-slider" min="20" max="80" step="5" value="40">
+        </div>
+
+        <!-- מקרא -->
+        <div class="legend" id="legend-container">
+            <div class="toolbar-title" style="margin-bottom: 5px;">מקרא:</div>
+            <div class="legend-item">
+                <div class="legend-icon" id="legend-cbd"></div><span>מת"ם (גלעין ראשי)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-icon" id="legend-large"></div><span>עוגן תאגידי</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-icon" id="legend-shared"></div><span>Hub שיתופי</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-icon"
+                    style="background:#95a5a6; border-radius:50%; width:12px; height:12px; margin:0 4px;"></div>
+                <span>אזור אדיש (התלבטות)</span>
+            </div>
+        </div>
+
+        <button class="btn-reset" onclick="resetMap()">נקה מפה (השאר רק מת"ם)</button>
+    </div>
+
+    <script>
+        // ==========================================
+        // מפות רקע ותצורת ה-Map
+        // ==========================================
+        const basemaps = {
+            osm: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors', maxZoom: 19 }),
+            light: L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; OpenStreetMap', subdomains: 'abcd', maxZoom: 19 }),
+            dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; OpenStreetMap', subdomains: 'abcd', maxZoom: 19 }),
+            satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles &copy; Esri', maxZoom: 19 }),
+            streets: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles &copy; Esri', maxZoom: 19 }),
+            topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenTopoMap', maxZoom: 17 }),
+            gray: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles &copy; Esri', maxZoom: 16 })
+        };
+
+        const map = L.map('map', { preferCanvas: true, layers: [basemaps.osm] }).setView([32.75, 35.15], 11);
+
+        let catchmentLayer = L.layerGroup().addTo(map);
+        let markersLayer = L.layerGroup().addTo(map);
+
+        function changeBasemap(mode) {
+            Object.values(basemaps).forEach(layer => map.removeLayer(layer));
+            basemaps[mode].addTo(map);
+        }
+
+        // ==========================================
+        // סינון אזורים גיאוגרפיים (Bounding Boxes)
+        // ==========================================
+        const regions = {
+            all: { minLat: 32.20, maxLat: 33.35, minLon: 34.80, maxLon: 35.70, center: [32.75, 35.10], zoom: 10 },
+            haifa_valleys: { minLat: 32.55, maxLat: 32.89, minLon: 34.90, maxLon: 35.50, center: [32.72, 35.15], zoom: 11 },
+            galilee: { minLat: 32.89, maxLat: 33.30, minLon: 34.95, maxLon: 35.70, center: [33.00, 35.30], zoom: 11 }
+        };
+        let activeRegion = 'haifa_valleys';
+
+        function changeRegion(regionKey) {
+            activeRegion = regionKey;
+            const r = regions[regionKey];
+            map.flyTo(r.center, r.zoom, { duration: 1.5 });
+            setTimeout(updateModel, 500);
+        }
+
+        // חומת מגן ליבשה (משמש את המודל התיאורטי)
+        const landPolygon = [
+            [31.00, 36.00], [33.50, 36.00], [33.50, 35.10], [32.92, 35.06],
+            [32.83, 35.04], [32.81, 35.02], [32.82, 34.99], [32.838, 34.975],
+            [32.82, 34.955], [32.78, 34.945], [32.75, 34.935], [32.69, 34.93],
+            [32.63, 34.92], [32.55, 34.90], [32.50, 34.88], [31.00, 34.00]
+        ];
+
+        function isLand(lat, lon) {
+            let inside = false;
+            for (let i = 0, j = landPolygon.length - 1; i < landPolygon.length; j = i++) {
+                const xi = landPolygon[i][0], yi = landPolygon[i][1];
+                const xj = landPolygon[j][0], yj = landPolygon[j][1];
+                if (((yi > lon) !== (yj > lon)) && (lat < (xj - xi) * (lon - yi) / (yj - yi) + xi)) inside = !inside;
+            }
+            return inside;
+        }
+
+        // ==========================================
+        // יצירת ויזואליזציית אייקונים (SVG)
+        // ==========================================
+        function getShapeSVG(category, color, size) {
+            const strokeColor = '#2c3e50';
+            let svgContent = category === 'cbd' ? `<polygon points="12,1 15,9 23,9 17,14 19,22 12,17 5,22 7,14 1,9 9,9" fill="${color}" stroke="${strokeColor}" stroke-width="1.5" stroke-linejoin="round"/>` : category === 'large' ? `<rect x="3" y="3" width="18" height="18" rx="2" fill="${color}" stroke="${strokeColor}" stroke-width="1.5"/>` : `<polygon points="12,2 22,20 2,20" fill="${color}" stroke="${strokeColor}" stroke-width="1.5" stroke-linejoin="round"/>`;
+            return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">${svgContent}</svg>`;
+        }
+
+        document.getElementById('icon-preview-large').innerHTML = getShapeSVG('large', '#3498db', 20);
+        document.getElementById('icon-preview-shared').innerHTML = getShapeSVG('shared', '#2ecc71', 20);
+        document.getElementById('legend-cbd').innerHTML = getShapeSVG('cbd', '#e74c3c', 20);
+        document.getElementById('legend-large').innerHTML = getShapeSVG('large', '#3498db', 20);
+        document.getElementById('legend-shared').innerHTML = getShapeSVG('shared', '#2ecc71', 20);
+
+        // ==========================================
+        // ניהול מודל הנתונים
+        // ==========================================
+        let destinations = [];
+        let hubCounters = { large: 0, shared: 0 };
+        let currentAlpha = 2.0;
+        let currentResolution = 40;
+        let currentMode = 'none';
+        let colorDisplayMode = 'type';
+        let populationMode = 'realistic';
+
+        const individualPalette = ['#9b59b6', '#f1c40f', '#e67e22', '#1abc9c', '#e84393', '#00cec9', '#fdcb6e', '#d35400', '#8e44ad', '#16a085', '#ff7675', '#74b9ff', '#a29bfe', '#ffeaa7', '#fab1a0'];
+        let colorIndex = 0;
+
+        function setColorMode(mode) {
+            colorDisplayMode = mode;
+            document.getElementById('btn-color-type').classList.remove('active');
+            document.getElementById('btn-color-ind').classList.remove('active');
+            document.getElementById(mode === 'type' ? 'btn-color-type' : 'btn-color-ind').classList.add('active');
+            drawMarkers(); updateModel();
+        }
+
+        function changePopMode(mode) {
+            populationMode = mode;
+            document.getElementById('res-slider-container').style.display = (mode === 'theoretical') ? 'block' : 'none';
+            updateModel();
+        }
+
+        function getNextColor() { return individualPalette[(colorIndex++) % individualPalette.length]; }
+
+        function resetMap() {
+            hubCounters = { large: 0, shared: 0 }; colorIndex = 0;
+            destinations = [{ id: 'matam', name: 'מת"ם (גלעין ראשי)', lat: 32.775, lon: 34.958, mass: 1000, category: 'cbd', typeColor: '#e74c3c', indColor: '#e74c3c' }];
+            drawMarkers(); updateModel();
+        }
+
+        // ==========================================
+        // אירועי ממשק
+        // ==========================================
+        document.getElementById('alpha-slider').addEventListener('input', function () {
+            currentAlpha = parseFloat(this.value); document.getElementById('alpha-value').textContent = currentAlpha.toFixed(1); updateModel();
+        });
+
+        document.getElementById('res-slider').addEventListener('input', function () {
+            currentResolution = parseInt(this.value); document.getElementById('res-value').textContent = currentResolution + 'x' + currentResolution; updateModel();
+        });
+
+        document.querySelectorAll('input[name="map-tool"]').forEach(radio => {
+            radio.addEventListener('change', function () {
+                currentMode = this.value; document.getElementById('map').style.cursor = (currentMode === 'none') ? '' : 'crosshair';
+            });
+        });
+
+        map.on('click', function (e) {
+            if (currentMode === 'none') return;
+            if (currentMode === 'large_hub') {
+                hubCounters.large++;
+                destinations.push({ id: `large_${hubCounters.large}`, name: `עוגן תאגידי ${hubCounters.large}`, lat: e.latlng.lat, lon: e.latlng.lng, mass: parseInt(document.getElementById('large-mass').value), category: 'large', typeColor: '#3498db', indColor: getNextColor() });
+            } else if (currentMode === 'shared_hub') {
+                hubCounters.shared++;
+                destinations.push({ id: `shared_${hubCounters.shared}`, name: `Hub שיתופי ${hubCounters.shared}`, lat: e.latlng.lat, lon: e.latlng.lng, mass: parseInt(document.getElementById('shared-mass').value), category: 'shared', typeColor: '#2ecc71', indColor: getNextColor() });
+            }
+            drawMarkers(); updateModel();
+        });
+
+        function haversineDistance(lat1, lon1, lat2, lon2) {
+            const dLat = (lat2 - lat1) * Math.PI / 180, dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+            return Math.max(6371.0 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)), 0.1);
+        }
+
+        function drawMarkers() {
+            markersLayer.clearLayers();
+            destinations.forEach(dest => {
+                const iconSize = Math.max(Math.sqrt(dest.mass) * 2.2, 16);
+                const activeColor = colorDisplayMode === 'type' ? dest.typeColor : dest.indColor;
+                const marker = L.marker([dest.lat, dest.lon], { icon: L.divIcon({ html: getShapeSVG(dest.category, activeColor, iconSize), className: 'custom-shape-icon', iconSize: [iconSize, iconSize], iconAnchor: [iconSize / 2, iconSize / 2] }) });
+
+                let tooltipText = `<b>${dest.name}</b><br>מסה: ${dest.mass}`;
+                if (dest.id !== 'matam') tooltipText += `<br><small style="color:#d35400;">(לחיצה למחיקה)</small>`;
+                marker.bindTooltip(tooltipText, { permanent: false, direction: 'top' });
+
+                marker.on('click', function (e) {
+                    L.DomEvent.stopPropagation(e); if (dest.id === 'matam') return;
+                    destinations = destinations.filter(d => d.id !== dest.id); drawMarkers(); updateModel();
+                });
+                marker.addTo(markersLayer);
+            });
+        }
+
+        // ==========================================
+        // מנוע חישוב הכבידה הראשי (פיצול בין מציאות לתיאוריה)
+        // ==========================================
+        function updateModel() {
+            catchmentLayer.clearLayers();
+            if (destinations.length === 0) return;
+
+            const applyThreshold = document.getElementById('threshold-toggle').checked;
+            const r = regions[activeRegion];
+
+            if (populationMode === 'realistic') {
+                if (typeof simulatedPeople === 'undefined') return;
+
+                simulatedPeople.forEach(person => {
+                    if (person.lat < r.minLat || person.lat > r.maxLat || person.lon < r.minLon || person.lon > r.maxLon) return;
+
+                    let totalUtility = 0, utilities = {};
+                    destinations.forEach(dest => {
+                        const dist = haversineDistance(person.lat, person.lon, dest.lat, dest.lon) + 0.5;
+                        const utility = dest.mass / Math.pow(dist, currentAlpha);
+                        utilities[dest.id] = utility; totalUtility += utility;
+                    });
+
+                    let maxProb = 0, winningDestId = "";
+                    for (const [id, utility] of Object.entries(utilities)) {
+                        const prob = utility / totalUtility;
+                        if (prob > maxProb) { maxProb = prob; winningDestId = id; }
+                    }
+
+                    let winningDest = destinations.find(d => d.id === winningDestId);
+                    let activeGridColor = colorDisplayMode === 'type' ? winningDest.typeColor : winningDest.indColor;
+                    let destNameDisplay = winningDest.name;
+
+                    if (applyThreshold && maxProb < 0.40) {
+                        activeGridColor = '#95a5a6';
+                        destNameDisplay = 'אזור ניטרלי (התלבטות)';
+                    }
+
+                    L.circleMarker([person.lat, person.lon], {
+                        radius: 3.5,
+                        color: activeGridColor, fillColor: activeGridColor, fillOpacity: 0.85, weight: 0
+                    }).bindTooltip(
+                        `<div style="text-align: right; direction: rtl;">
+                        <b>${person.name}</b><br>
+                        עוגן שולט: ${destNameDisplay}<br>
+                        הסתברות הגעה: ${(maxProb * 100).toFixed(1)}%
+                        </div>`
+                    ).addTo(catchmentLayer);
+                });
+
+            } else {
+                const latStep = (r.maxLat - r.minLat) / currentResolution;
+                const lonStep = (r.maxLon - r.minLon) / currentResolution;
+                const pointRadius = Math.max(2, 240 / currentResolution);
+
+                for (let lat = r.minLat; lat <= r.maxLat; lat += latStep) {
+                    for (let lon = r.minLon; lon <= r.maxLon; lon += lonStep) {
+
+                        if (!isLand(lat, lon)) continue;
+
+                        let totalUtility = 0, utilities = {};
+                        destinations.forEach(dest => {
+                            const dist = haversineDistance(lat, lon, dest.lat, dest.lon);
+                            const utility = dest.mass / Math.pow(dist, currentAlpha);
+                            utilities[dest.id] = utility; totalUtility += utility;
+                        });
+
+                        let maxProb = 0, winningDestId = "";
+                        for (const [id, utility] of Object.entries(utilities)) {
+                            const prob = utility / totalUtility;
+                            if (prob > maxProb) { maxProb = prob; winningDestId = id; }
+                        }
+
+                        let winningDest = destinations.find(d => d.id === winningDestId);
+                        if (!winningDest) continue;
+
+                        let activeGridColor = colorDisplayMode === 'type' ? winningDest.typeColor : winningDest.indColor;
+                        let destNameDisplay = winningDest.name;
+
+                        if (applyThreshold && maxProb < 0.40) {
+                            activeGridColor = '#95a5a6';
+                            destNameDisplay = 'אזור ניטרלי (התלבטות)';
+                        }
+
+                        L.circleMarker([lat, lon], {
+                            radius: pointRadius,
+                            color: activeGridColor, fillColor: activeGridColor, fillOpacity: 0.65, weight: 0
+                        }).bindTooltip(
+                            `<div style="text-align: right; direction: rtl;">
+                            <b>נקודת רשת תיאורטית</b><br>
+                            עוגן שולט: ${destNameDisplay}<br>
+                            הסתברות הגעה: ${(maxProb * 100).toFixed(1)}%
+                            </div>`
+                        ).addTo(catchmentLayer);
+                    }
+                }
+            }
+        }
+
+        setTimeout(resetMap, 500);
+    </script>
+</body>
+
+</html>
